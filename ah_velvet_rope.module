@@ -1,0 +1,120 @@
+<?php
+// %Id$
+
+/**
+ * @file
+ * ah velvet rope module 
+ */
+ 
+/**
+ * Implement hook_perm to add permission to edit settings
+ */
+function ah_velvet_rope_perm(){
+	return array('ah velvet rope admin');
+}
+
+/**
+ * Implement hook_menu to add the menu item for administration
+ */
+function ah_velvet_rope_menu(){
+	$items['admin/settings/ah_velvet_rope'] = array(
+		'title' => 'AH Velvet Rope Settings',
+		'description' => 'Set max page views and reset interval',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('ah_velvet_rope_admin_settings'),
+		'access arguments' => array('ah velvet rope admin'),
+		'file' => 'ah_velvet_rope.admin.inc',
+	);
+	
+	return $items;
+}
+
+/**
+ * Implement hook_init to run velvet rope logic on every page load
+ * still need to call from javascript   <--------------------------------------------------------------
+ */ 
+function ah_velvet_rope_init(){	
+	if( !user_is_logged_in() && !ah_velvet_rope_page_is_exempt() ){	
+		$reset_interval = variable_get('ah_velvet_rope_settings_reset_interval', 2592000);	
+		$max_clicks = variable_get('ah_velvet_rope_settings_max_pageviews', 10);		
+		$user_record = ah_velvet_rope_get_record();		
+		$user_pagehits = $user_record->pagehits + 1;			
+		if($user_record->timestamp + $reset_interval < time()){  //page view record hasn't expired yet
+			if($user_pagehits > $max_clicks){	//over the limit, send to velvet rope	
+				watchdog('ah_velvet_rope', 'User exceeded page view limit:'.$user_record->id, NULL, WATCHDOG_DEBUG);		
+				drupal_goto(variable_get('ah_velvet_rope_settings_url', 'velvet-rope'));
+			}
+			else{ //increment page views for this user
+				watchdog('ah_velvet_rope', 'Updating page view count:'.$user_record->id.', ['.$user_pagehits.']', NULL, WATCHDOG_DEBUG);
+				$table = 'ah_velvet_rope';
+				$user_record->pagehits = $user_pagehits;
+				drupal_write_record($table, $user_record, 'id');
+			}
+		}
+		else{ //enough time has passed, reset page hits for this user
+			watchdog('ah_velvet_rope', 'Resetting page view count:'.$user_record->id, NULL, WATCHDOG_DEBUG);
+			$table = 'ah_velvet_rope';
+			$user_record->pagehits = 0;
+			$user_record->createdon = time();
+			drupal_write_record($table, $user_record, 'id');
+		}
+	}
+}
+
+/**
+ * Get velvet rope record for this user
+ */
+function ah_velvet_rope_get_record(){
+	if( !isset($_COOKIE['session_id']) ) {//cookie doesn't exist, create a new one
+		$cookieid = uniqid('', true);
+		setcookie('session_id', $cookieid, time()+$reset_time );
+		watchdog('ah_velvet_rope', 'Created new velvet rope cookie:'.$_COOKIE['session_id'], NULL, WATCHDOG_DEBUG);
+	}
+	
+	$user_record = db_fetch_object(db_query("SELECT * FROM {ah_velvet_rope} WHERE id = '%s'", $_COOKIE['session_id']));		
+	if(!$user_record){//no record in the db for this cookie, create one
+		$table = 'ah_velvet_rope';
+		$record = new stdClass();
+		$record->id = $_COOKIE['session_id'];
+		$record->ipaddress = ip_address();
+		$record->pagehits = 0;
+		$record->createdon = time();
+		drupal_write_record($table, $record);
+		$user_record = db_fetch_object(db_query("SELECT * FROM {ah_velvet_rope} WHERE id = '%s'", $_COOKIE['session_id']));		
+		
+		watchdog('ah_velvet_rope', 'Created new velvet rope record:'.$_COOKIE['session_id'], NULL, WATCHDOG_DEBUG);
+	}	
+	
+	watchdog('ah_velvet_rope', 'Retrieved velvet rope record:'.$_COOKIE['session_id'], NULL, WATCHDOG_DEBUG);
+	return $user_record;
+}
+
+/**
+ * Velvet rope exemptions
+ */
+function ah_velvet_rope_page_is_exempt(){	
+	$uri = ltrim(trim(request_uri()),'/');	
+	
+	watchdog('ah_velvet_rope', 'Is page exempt:'.$uri, NULL, WATCHDOG_DEBUG);
+	if($uri == trim(variable_get('ah_velvet_rope_settings_url','velvet-rope'))) {
+		return true;
+	}
+	
+	$static_exemptions = array_map('trim',explode(',',variable_get('ah_velvet_rope_settings_static_exemptions','velvet-rope')));
+	if(in_array($uri, $static_exemptions)){
+		return true;
+	}
+	
+	if(arg(0) == 'node' && is_numeric(arg(1))){
+		$node = node_load(arg(1));
+		if(strtolower($node->field_click_rule[0]['value']) == "yes"){
+			return true;
+		}
+	}	
+	return false;
+}
+
+
+
+
+

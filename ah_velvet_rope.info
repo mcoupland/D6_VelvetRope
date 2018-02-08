@@ -1,0 +1,5 @@
+; $Id$
+name = ah_velvet_rope
+description = Counts page views by anonymous visitor, redirects to velvet-rope if over the limit
+core = 6.x
+package = Andrew Harper Custom

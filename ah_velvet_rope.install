@@ -1,0 +1,74 @@
+<?php
+// %Id$
+
+/**
+ * @file
+ * ah velvet rope module installer
+ */
+ 
+/**
+ * Implement hook_install
+ */
+function ah_velvet_rope_install(){
+	drupal_install_schema('ah_velvet_rope');
+}
+ 
+/**
+ * Implement hook_uninstall
+ */
+function ah_velvet_rope_uninstall(){
+	drupal_uninstall_schema('ah_velvet_rope');
+	variable_del('ah_velvet_rope_settings_max_pageviews');
+	variable_del('ah_velvet_rope_settings_reset_interval');
+	variable_del('ah_velvet_rope_settings_static_exemptions');
+	variable_del('ah_velvet_rope_settings_url');
+}
+
+/**
+ * Implement hook_schema to create tables used by this module
+ */
+function ah_velvet_rope_schema(){
+	$schema['ah_velvet_rope'] = array(
+		'description' => 'Stores number of pages an anonymous user has visited',
+		'fields' => array(
+			'id' => array(
+				'type' => 'varchar',
+				'length' => 23,
+				'not null' => TRUE,
+				'description' => 'Primary key field',
+			),
+			'ipaddress' => array(
+				'type' => 'varchar',
+				'length' => 128,
+				'not null' => TRUE,
+				'default' => 'UNKNOWN',
+				'description' => 'IP address of the anonymous user',
+			),
+			'pagehits' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'small',
+				'not null' => TRUE,
+				'description' => 'Number of pages visited by the anonymous user',
+			),
+			'createdon' => array(
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'size' => 'normal',
+				'not null' => TRUE,
+				'description' => 'Time of anonymous users first visit to the site.  Used to determine whether or not to reset pagehits',
+			),
+		),
+		'primary key' => array('id'),
+	);
+	
+	return $schema;
+}
+
+
+
+
+
+
+
+
